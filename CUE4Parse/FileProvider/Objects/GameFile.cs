@@ -3,6 +3,9 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using CUE4Parse.Compression;
+using CUE4Parse.UE4.Exceptions;
+using CUE4Parse.UE4.IO.Objects;
+using CUE4Parse.UE4.Pak.Objects;
 using CUE4Parse.UE4.Readers;
 using CUE4Parse.Utils;
 using Serilog;
@@ -19,6 +22,27 @@ namespace CUE4Parse.FileProvider.Objects
         {
             Path = path;
             Size = size;
+        }
+
+        private int? _filePatchVersion;
+        public int FilePatchVersion => _filePatchVersion ??= GetFilePatchVersion();
+
+        private int GetFilePatchVersion()
+        {
+            var path = this switch
+            {
+                FPakEntry file => System.IO.Path.GetFileNameWithoutExtension(file.PakFileReader.Name),
+                FIoStoreEntry floFile => System.IO.Path.GetFileNameWithoutExtension(floFile.IoStoreReader.Name),
+                _ => throw new ParserException($"Unknown GameFile type {Path}")
+            };
+            var entries = path.Split('_');
+            if (entries.Length < 3)
+                return -1;
+            if (entries[^1] != "P")
+                return -1;
+            if (!int.TryParse(entries[^2], out var version))
+                return -1;
+            return version;
         }
 
         public abstract bool IsEncrypted { get; }

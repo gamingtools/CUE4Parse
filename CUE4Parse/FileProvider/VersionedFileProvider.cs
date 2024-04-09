@@ -77,6 +77,10 @@ public class VersionedFileProvider : DefaultFileProvider
 
         private static int GetVersionFromFile(GameFile gameFile)
         {
+            if (gameFile.FilePatchVersion != -1)
+            {
+
+            }
             var packageFileName = gameFile switch
             {
                 FPakEntry file => Path.GetFileNameWithoutExtension(file.PakFileReader.Name),
