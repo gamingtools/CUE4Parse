@@ -1,4 +1,5 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,6 +14,8 @@ namespace CUE4Parse.FileProvider.Vfs
     {
         private readonly ConcurrentDictionary<FPackageId, GameFile> _byId = new ();
         public IReadOnlyDictionary<FPackageId, GameFile> byId => _byId;
+
+        private readonly ConcurrentDictionary<string, ConcurrentBag<GameFile>> _fileVersions = new();
 
         private readonly KeyEnumerable _keys;
         private readonly ValueEnumerable _values;
@@ -38,8 +41,17 @@ namespace CUE4Parse.FileProvider.Vfs
                 {
                     _byId[ioEntry.ChunkId.AsPackageId()] = file;
                 }
+
+                _fileVersions.AddOrUpdate(
+                    IsCaseInsensitive ? file.Path.ToLowerInvariant() : file.Path, new ConcurrentBag<GameFile>{file},
+                    (_, existing) => {
+                        existing.Add(file);
+                        return existing;
+                    });
             }
             _indicesBag.Add(newFiles);
+
+
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -66,13 +78,25 @@ namespace CUE4Parse.FileProvider.Vfs
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryGetValue(string key, out GameFile value)
         {
+            return TryGetValue(key, out value, null);
+        }
+
+        private bool TryGetValue(string key, out GameFile value, int? version = null)
+        {
             if (IsCaseInsensitive)
                 key = key.ToLowerInvariant();
-            foreach (var files in _indicesBag)
+
+            if (_fileVersions.TryGetValue(key, out var gameFiles))
             {
-                if (files.TryGetValue(key, out value))
-                    return true;
+                version ??= int.MaxValue;
+                value = gameFiles.Where(f => f.FilePatchVersion <= version).MaxBy(f => f.FilePatchVersion);
+                if(value!= default) return true;
             }
+            //foreach (var files in _indicesBag)
+            //{
+            //    if (files.TryGetValue(key, out value))
+            //        return true;
+            //}
 
             value = default;
             return false;
